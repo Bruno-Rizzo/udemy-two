@@ -1,0 +1,228 @@
+1 - Instalar a biblioteca do breeze
+
+sail composer require laravel/breeze --dev
+sail artisan breeze:install
+
+
+
+2 - Criar o model Role com a respectiva migration
+
+sail artisan make:model Role -m
+
+
+
+3 - Criar o model Permission com a respectiva migration
+
+sail artisan make:model Permission -m
+
+
+
+4 - Na migration de usuários editar:
+
+ Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('role_id')->constrained('roles')->onDelete('cascade');
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->rememberToken();
+            $table->timestamps();
+        });
+
+
+
+5 - Na migration de roles editar:
+
+Schema::create('roles', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->timestamps();
+        });
+
+
+
+6 - Na migration de permission editar:
+
+Schema::create('permissions', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->timestamps();
+        });
+
+
+
+7 - Criar a migration de relação permission-role  e editá-la:
+
+sail artisan make:migration create_permission_role_table
+
+Schema::create('permission_role', function (Blueprint $table) {
+            $table->foreignId('permission_id')->constrained('permissions')->onDelete('cascade');
+            $table->foreignId('role_id')->constrained('roles')->onDelete('cascade');
+        });
+
+
+
+8 - Renomear a tabela users para que seja aúltima da fila a ser criada
+
+
+
+9 - Rodar a migration:
+
+sail artisan migrate:fresh
+
+
+
+10 - No model User adicionar o campo role_id e criar a relação:
+
+protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role_id
+    ];
+
+public function role()
+    {
+        return $this->belongsTo(Role::class);
+    }
+
+
+
+11 - No model Role e no Permission adicionar o campo name:
+
+protected $fillable = ['name'];
+
+
+
+12 - No model Role criar a relação com Usuario:
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
+
+
+
+13 - Criar o AdminSeeder:
+
+sail artisan make:seeder AdminSeeder
+
+ public function run()
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $userRole  = Role::create(['name' => 'user']);
+
+        User::create([
+            'name'              => 'Admin',
+            'email'             => 'admin@email.com',
+            'password'          => bcrypt('password'),
+            'email_verified_at' => now(),
+            'role_id'           => $adminRole->id
+        ]);
+
+        User::create([
+            'name'              => 'Teste',
+            'email'             => 'teste@email.com',
+            'password'          => bcrypt('password'),
+            'email_verified_at' => now(),
+            'role_id'           => $userRole->id
+        ]);
+
+    }
+
+
+
+14 - Adicionar ao DatabaseSeeder:
+
+ public function run()
+    {
+        $this->call(AdminSeeder::class);
+    }
+
+sail artisan db:seed
+
+
+
+
+15 - Fazer as alterações de layout, copiando do projeto udemy-one
+
+
+
+16 - Criar o controller AdminController, o método index e a rota
+
+sail artisan make:controller Admin/AdminController
+
+ public function index()
+    {
+        return view('admin.index');
+    }
+
+Route::middleware(['auth'])->group(function(){
+    Route::get('/admin',[AdminController::class, 'index'])->name('admin.index');
+});
+
+
+
+17 - Criar a página index de Admin e importar o layout
+
+<x-admin-layout>
+    <h1>Admin Index</h1>
+</x-admin-layout>
+
+
+
+18 - No model User criar o método hasRole
+
+public function hasRole($name):bool
+    {
+        return $this->role()->where('name',$name)->exists();
+    }
+
+
+
+19 - Criar um Middleware para todas as Funções (Roles)
+
+sail artisan make:middleware HasRoleMiddleware
+
+public function handle(Request $request, Closure $next, string $role)
+    {
+        if(!auth()->user() || !auth()->user()->hasRole($role)){
+            abort(403);
+        }
+        return $next($request);
+    }
+
+
+
+20 - Registar o Middleware no Kernel.php
+
+'role' => HasRoleMiddleware::class
+
+
+
+21 - No grupo de rotas '/admin' incluir este middleware
+
+Route::middleware(['auth','role:'admin'])->group(function(){
+    Route::get('/admin',[AdminController::class, 'index'])->name('admin.index');
+});
+
+
+
+22 - Em resources/views/layouts/navigation e adicionar um link
+
+@if(Auth::user()->hasRole('admin'))
+    <x-nav-link :href="route('admin.index')" :active="request()->routeIs('admin.index')">
+        {{ __('Admin') }}
+    </x-nav-link>
+@endif
+
+
+
+
+
+
+
+
+
+
